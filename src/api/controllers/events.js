@@ -1,18 +1,24 @@
-const { deleteFile } = require('../../utils/deleteFile');
+const { deleteFile } = require('../../utils/file');
 const Event = require('../models/events');
 const mongoose = require('mongoose');
 const User = require('../models/users');
+const jwt = require('jsonwebtoken');
 
 const getEvents = async (req, res, next) => {
   try {
     const allEvents = await Event.find()
-      .populate('author', 'userName')
-      .populate('attendants', 'userName');
-    return res.status(200).json(allEvents);
+      .populate('createdBy', 'userName')
+      .populate('attendants', 'userName')
+      .exec();
+
+    const eventsWithAttendantsCount = allEvents.map(event => ({
+      ...event._doc,
+      attendantsCount: event.attendants.length
+    }));
+
+    return res.status(200).json(eventsWithAttendantsCount);
   } catch (err) {
-    return res
-      .status(400)
-      .json({ error: `Error getEvents: ${err.message}` });
+    return res.status(400).json({ error: `Error al obtener eventos: ${err.message}` });
   }
 };
 
@@ -21,85 +27,70 @@ const getEventById = async (req, res, next) => {
     const { id } = req.params;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ error: 'Invalid ID' });
+      return res.status(400).json({ error: 'ID de evento no válido' });
     }
 
     const event = await Event.findById(id)
-      .populate('author', 'userName')
+      .populate('createdBy', 'userName')
       .populate('attendants', 'userName');
 
     if (!event) {
-      return res.status(404).json({ error: 'Event not found' });
+      return res.status(404).json({ error: 'Evento no encontrado' });
     }
 
     return res.status(200).json(event);
   } catch (err) {
     return res
       .status(400)
-      .json({ error: `Error getEventById: ${err.message}` });
+      .json({ error: `Error al obtener evento: ${err.message}` });
   }
 };
 
-const createEvent = async (req, res, next) => {
+const createEvent = async (req, res) => {
   try {
-    console.log(req.body);
-
-    if (!req.body.title || !req.body.description || !req.body.date) {
-      return res.status(400).json({ error: 'Required fields' });
+    if (req.user.rol !== 'admin') { 
+      return res.status(403).json({ error: 'Acceso denegado. Solo los administradores pueden crear eventos.' });
     }
+
+    const { title, description, date } = req.body;
+    const imageUrl = req.file ? req.file.path : null; 
 
     const newEvent = new Event({
-      title: req.body.title,
-      date: req.body.date,
-      description: req.body.description,
-      author: req.body.author,
+      title,
+      description,
+      date,
+      imageUrl,
+      createdBy: req.user._id, 
     });
 
-    if (req.file) {
-      newEvent.imageUrl = req.file.path;
-    }
-
-    const eventSaved = await newEvent.save();
-    return res.status(201).json(eventSaved);
-  } catch (err) {
-    console.error(err);
-    return res
-      .status(400)
-      .json({ error: `Error createEvent: ${err.message}` });
+    await newEvent.save();
+    res.status(201).json(newEvent);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 };
 
-const updateEvent = async (req, res, next) => {
+
+const updateEvent = async (req, res) => {
   try {
-    const { id } = req.params;
-    const updatedData = { ...req.body };
+    const { title, description, date } = req.body;
+    const imageUrl = req.file ? req.file.path : null; // Obtiene la URL de la imagen cargada
 
-    if (req.file) {
-      const eventToUpdate = await Event.findById(id);
-      if (!eventToUpdate) {
-        return res.status(404).json({ error: 'Event not found' });
-      }
+    const event = await Event.findById(req.params.id);
 
-      if (eventToUpdate.imageUrl) {
-        await deleteFile(eventToUpdate.imageUrl);
-      }
-      updatedData.imageUrl = req.file.path;
+    if (!event) {
+      return res.status(404).json({ error: 'Evento no encontrado' });
     }
 
-    const updatedEvent = await Event.findByIdAndUpdate(id, updatedData, {
-      new: true,
-    });
+    event.title = title || event.title;
+    event.description = description || event.description;
+    event.date = date || event.date;
+    event.imageUrl = imageUrl || event.imageUrl; // Actualiza la imagen si se proporciona
 
-    if (!updatedEvent) {
-      return res.status(404).json({ error: 'Event not found' });
-    }
-
-    return res.status(200).json(updatedEvent);
-  } catch (err) {
-    console.error(err);
-    return res
-      .status(400)
-      .json({ error: `Error updateEvent: ${err.message}` });
+    await event.save();
+    res.status(200).json(event);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 };
 
@@ -109,7 +100,7 @@ const deleteEvent = async (req, res, next) => {
     const eventToRemove = await Event.findByIdAndDelete(id);
 
     if (!eventToRemove) {
-      return res.status(404).json({ error: 'Event not found' });
+      return res.status(404).json({ error: 'Evento no encontrado' });
     }
 
     if (eventToRemove.imageUrl) {
@@ -117,63 +108,50 @@ const deleteEvent = async (req, res, next) => {
     }
 
     return res.status(200).json({
-      message: 'Event removed',
+      message: 'Evento eliminado correctamente',
       event: eventToRemove,
     });
   } catch (err) {
     console.error(err);
     return res
       .status(400)
-      .json({ error: `Error deleteEvent: ${err.message}` });
+      .json({ error: `Error al eliminar evento: ${err.message}` });
   }
 };
 
-const addAttendant = async (req, res, next) => {
+const addAttendant = async (req, res) => {
   try {
-    const { eventId } = req.params;
-    const { userId } = req.body;
+    const userId = req.userData.userId; // ID del usuario extraído del token
+    const eventId = req.params.eventId;
 
-    if (
-      !mongoose.Types.ObjectId.isValid(eventId) ||
-      !mongoose.Types.ObjectId.isValid(userId)
-    ) {
-      return res
-        .status(400)
-        .json({ error: 'User not valid' });
-    }
-
+    // Encuentra el evento por ID
     const event = await Event.findById(eventId);
-
     if (!event) {
-      return res.status(404).json({ error: 'Event not found' });
+      return res.status(404).json({ error: 'Evento no encontrado' });
     }
 
-    if (event.attendants.includes(userId)) {
-      return res
-        .status(400)
-        .json({ error: 'User already exists' });
-    }
-
-    event.attendants.push(userId);
-    await event.save();
-
+    // Encuentra al usuario por ID
     const user = await User.findById(userId);
     if (!user) {
-      return res.status(404).json({ error: 'User not found' });
+      return res.status(404).json({ error: 'Usuario no encontrado' });
     }
 
+    // Añade el usuario a la lista de asistentes del evento si no está ya
+    if (!event.attendants.includes(userId)) {
+      event.attendants.push(userId);
+      await event.save();
+    }
+
+    // Añade el evento a la lista de eventos confirmados del usuario si no está ya
     if (!user.attendingEvents.includes(eventId)) {
       user.attendingEvents.push(eventId);
       await user.save();
     }
 
-    return res
-      .status(200)
-      .json({ message: 'Added user' });
+    res.status(200).json({ message: 'Asistencia confirmada' });
   } catch (error) {
-    return res
-      .status(500)
-      .json({ error: `Error addAttendant: ${error.message}` });
+    console.error('Error al añadir asistente:', error);
+    res.status(500).json({ error: 'Error al añadir asistente' });
   }
 };
 
@@ -188,7 +166,7 @@ const removeAttendant = async (req, res, next) => {
     ) {
       return res
         .status(400)
-        .json({ error: 'User not valid' });
+        .json({ error: 'ID de evento o usuario no válido' });
     }
 
     const event = await Event.findById(eventId).populate(
@@ -197,42 +175,48 @@ const removeAttendant = async (req, res, next) => {
     );
 
     if (!event) {
-      return res.status(404).json({ error: 'Event not found' });
+      return res.status(404).json({ error: 'Evento no encontrado' });
     }
 
+    // Verificar si el usuario está en la lista de asistentes
     const userIndex = event.attendants.findIndex(
       (attendant) => attendant._id.toString() === userId
     );
     if (userIndex === -1) {
       return res
         .status(400)
-        .json({ error: 'User is not an attendant' });
+        .json({ error: 'El usuario no está en la lista de asistentes' });
     }
 
+    // Remover al usuario de la lista de asistentes y guardar el evento
     event.attendants.splice(userIndex, 1);
     await event.save();
 
+    // Buscar el usuario por ID
     const user = await User.findById(userId);
 
     if (!user) {
-      return res.status(404).json({ error: 'User not found' });
+      return res.status(404).json({ error: 'Usuario no encontrado' });
     }
 
+    // Verificar si el evento está en la lista de eventos a los que el usuario asiste
     const eventIndex = user.attendingEvents.findIndex(
       (event) => event._id.toString() === eventId
     );
     if (eventIndex !== -1) {
+      // Remover el evento de la lista de eventos del usuario
       user.attendingEvents.splice(eventIndex, 1);
       await user.save();
     }
 
+    // Devolver respuesta exitosa
     return res
       .status(200)
-      .json({ message: 'Cancelled attendance', event });
+      .json({ message: 'Asistencia cancelada exitosamente', event });
   } catch (error) {
     return res
       .status(500)
-      .json({ error: `Error removeAttendant: ${error.message}` });
+      .json({ error: `Error al cancelar asistencia: ${error.message}` });
   }
 };
 
@@ -241,7 +225,7 @@ const getAttendeesByEvent = async (req, res, next) => {
     const { eventId } = req.params;
 
     if (!mongoose.Types.ObjectId.isValid(eventId)) {
-      return res.status(400).json({ error: 'ID not valid' });
+      return res.status(400).json({ error: 'ID de evento no válido' });
     }
 
     const event = await Event.findById(eventId).populate(
@@ -250,36 +234,16 @@ const getAttendeesByEvent = async (req, res, next) => {
     );
 
     if (!event) {
-      return res.status(404).json({ error: 'Event not found' });
+      return res.status(404).json({ error: 'Evento no encontrado' });
     }
 
     return res.status(200).json(event.attendants);
   } catch (error) {
-    console.error('Error getAttendeesByEvent:', error);
-    return res.status(500).json({ error: 'Server error' });
+    console.error('Error al obtener asistentes para el evento:', error);
+    return res.status(500).json({ error: 'Error interno del servidor' });
   }
 };
 
-const getConfirmedEventsByUser = async (req, res, next) => {
-  try {
-    const { userId } = req.params;
-
-    if (!mongoose.Types.ObjectId.isValid(userId)) {
-      return res.status(400).json({ error: 'ID de usuario no válido' });
-    }
-
-    const user = await User.findById(userId).populate('attendingEvents');
-
-    if (!user) {
-      return res.status(404).json({ error: 'Usuario no encontrado' });
-    }
-
-    return res.status(200).json(user.attendingEvents);
-  } catch (error) {
-    console.error('Error getConfirmedEventsByUser:', error);
-    return res.status(500).json({ error: 'Error del servidor' });
-  }
-};
 
 
 module.exports = {
@@ -291,5 +255,4 @@ module.exports = {
   addAttendant,
   removeAttendant,
   getAttendeesByEvent,
-  getConfirmedEventsByUser
 };

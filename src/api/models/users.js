@@ -8,6 +8,7 @@ const userSchema = new mongoose.Schema(
     email: { type: String, required: true, unique: true },
     profileImageUrl: { type: String, required: false },
     attendingEvents: [{ type: mongoose.Schema.Types.ObjectId, ref: 'events' }],
+
     rol: {
       type: String,
       required: true,
@@ -15,6 +16,7 @@ const userSchema = new mongoose.Schema(
       default: 'user',
     },
   },
+
   {
     timestamps: true,
     collection: 'users',

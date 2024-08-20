@@ -9,4 +9,4 @@ try {
 }
 }
 
-module.exports = connectDB 
+module.exports =  connectDB 

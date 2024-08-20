@@ -1,48 +1,45 @@
 const mongoose = require('mongoose');
-const { generateSign } = require('../../../jwt');
+const { generateSign, generateToken } = require('../../utils/jwt');
 const User = require('../models/users');
 const bcrypt = require('bcrypt');
-const { deleteFile } = require('../../utils/deletefile');
+const { deleteFile } = require('../../utils/file');
 
 const getUsers = async (req, res) => {
   try {
     const users = await User.find().populate('attendingEvents', 'title');
     return res.status(200).json(users);
   } catch (error) {
-    console.error('Error getting users:', error);
-    return res.status(500).json({ error: 'Server error' });
+    return res
+      .status(500)
+      .json({ error: 'No se pudieron obtener los usuarios' });
   }
 };
 
-const getUserById = async (req, res) => {
+const getUserById = async (req, res, next) => {
   try {
     const { id } = req.params;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ error: 'Invalid ID' });
+      return res.status(400).json({ error: 'ID de usuario no válido' });
     }
 
     const user = await User.findById(id).populate('attendingEvents');
 
     if (!user) {
-      return res.status(404).json({ error: 'User not found' });
+      return res.status(404).json({ error: 'Usuario no encontrado' });
     }
 
     return res.status(200).json(user);
   } catch (error) {
-    console.error('Error getting user by ID:', error);
-    return res.status(500).json({ error: 'Server error' });
+    return res
+      .status(400)
+      .json({ error: `Error al obtener el usuario: ${error.message}` });
   }
 };
 
-const register = async (req, res) => {
+const register = async (req, res, next) => {
   try {
     const { userName, password, email } = req.body;
-
-    const existingUser = await User.findOne({ userName });
-    if (existingUser) {
-      return res.status(400).json({ error: 'Username already in use' });
-    }
 
     const newUser = new User({
       userName,
@@ -51,126 +48,135 @@ const register = async (req, res) => {
       rol: 'user',
     });
 
+    const duplicateUser = await User.findOne({ userName });
+
+    if (duplicateUser) {
+      return res
+        .status(400)
+        .json({ error: 'El nombre de usuario ya está en uso' });
+    }
+
     const userSaved = await newUser.save();
+
     const token = generateSign(userSaved._id);
 
     return res.status(200).json({ user: userSaved, token });
   } catch (error) {
-    console.error('Error registering user:', error);
-    return res.status(500).json({ error: 'Server error' });
+    console.error('Error al registrar usuario:', error);
+    return res.status(500).json({
+      error: 'Error interno del servidor al procesar la solicitud de registro',
+    });
   }
 };
 
 const login = async (req, res) => {
+  const { userName, password } = req.body;
+
   try {
-    const { userName, password } = req.body;
-
     const user = await User.findOne({ userName });
-
     if (!user) {
-      return res.status(400).json({ error: 'User not found' });
+      return res.status(401).json({ error: 'Usuario no encontrado' });
     }
 
-    if (bcrypt.compareSync(password, user.password)) {
-      const token = generateSign(user._id);
-      return res.status(200).json({ user, token });
-    } else {
-      return res.status(400).json({ error: 'Invalid password' });
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(401).json({ error: 'Contraseña incorrecta' });
     }
+
+    const token = generateToken(user);
+    res.status(200).json({ token, role: user.rol });
   } catch (error) {
-    console.error('Error login:', error);
-    return res.status(500).json({ error: 'Server error' });
+    console.error('Error en el inicio de sesión:', error);
+    res.status(500).json({ error: 'Error en el inicio de sesión' });
   }
 };
 
-const deleteUser = async (req, res) => {
+
+const deleteUser = async (req, res, next) => {
   try {
     const { userId } = req.params;
     const deletedUser = await User.findByIdAndDelete(userId);
-
     if (!deletedUser) {
-      return res.status(404).json({ error: 'User not found' });
+      return res.status(404).json({ error: 'Usuario no encontrado' });
     }
-
-    return res.status(200).json({ message: 'User deleted' });
+    return res.status(200).json({ message: 'Usuario eliminado correctamente' });
   } catch (error) {
-    console.error('Error deleting user:', error);
-    return res.status(500).json({ error: 'Server error' });
+    console.error('Error al eliminar usuario:', error);
+    return res.status(500).json({
+      error:
+        'Error interno del servidor al procesar la solicitud de eliminación de usuario',
+    });
   }
 };
 
-const updateUser = async (req, res) => {
+const updateUser = async (req, res, next) => {
   try {
     const { id } = req.params;
+    console.log('User ID in Controller:', id); // Verifica el ID recibido en el backend
+
+    if (!id) {
+      return res.status(400).json({ error: 'ID de usuario no proporcionado' });
+    }
 
     const currentUser = await User.findById(id);
     if (!currentUser) {
-      return res.status(404).json({ error: 'User not found' });
+      return res.status(404).json({ error: 'Usuario no encontrado' });
     }
 
-    const updateData = { ...req.body };
+    const { userName, email } = req.body;
+    const updateData = {};
 
-    if (req.file) {
-      const oldImageUrl = currentUser.profileImageUrl;
-      updateData.profileImageUrl = req.file.path;
-
-      if (oldImageUrl) {
-        try {
-          await deleteFile(oldImageUrl);
-        } catch (error) {
-          console.error('Error deleting file:', error);
-        }
-      }
+    if (userName) {
+      updateData.userName = userName;
     }
-
-    if (req.body.currentPassword && req.body.newPassword) {
-      const isMatch = await bcrypt.compare(req.body.currentPassword, currentUser.password);
-      if (!isMatch) {
-        return res.status(400).json({ error: 'Current password is incorrect' });
-      }
-
-      if (req.body.newPassword.trim() !== '') {
-        updateData.password = bcrypt.hashSync(req.body.newPassword, 10);
-      } else {
-        return res.status(400).json({ error: 'New password cannot be empty' });
-      }
+    if (email) {
+      updateData.email = email;
     }
 
     const updatedUser = await User.findByIdAndUpdate(id, updateData, { new: true });
 
     if (!updatedUser) {
-      return res.status(404).json({ error: 'User not found' });
+      return res.status(404).json({ error: 'Usuario no encontrado' });
     }
 
     return res.status(200).json(updatedUser);
   } catch (error) {
-    console.error('Error updating user:', error);
-    return res.status(500).json({ error: 'Server error' });
+    console.error('Error al actualizar usuario:', error);
+    return res.status(500).json({
+      error: 'Error interno del servidor al actualizar el usuario',
+    });
   }
 };
+
 
 const getUserProfile = async (req, res) => {
   try {
-    const user = req.user;
-
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
+    const userId = req.user?._id; // Usa `req.user._id`
+    if (!userId) {
+      return res.status(400).json({ error: 'ID de usuario no proporcionado' });
     }
 
-    return res.status(200).json(user);
+    // Encuentra el usuario y poblaciones los eventos confirmados
+    const user = await User.findById(userId).populate('attendingEvents', 'title date');
+
+    if (!user) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    // Devuelve solo los eventos confirmados
+    res.status(200).json(user.attendingEvents);
   } catch (error) {
-    console.error('Error getting user profile:', error);
-    return res.status(500).json({ error: 'Server error' });
+    console.error('Error al obtener eventos confirmados del usuario:', error);
+    res.status(500).json({ error: 'Error al obtener eventos confirmados' });
   }
 };
 
-
 module.exports = {
+  getUserProfile,
   getUsers,
   getUserById,
   register,
   login,
   deleteUser,
   updateUser,
-  getUserProfile
 };
