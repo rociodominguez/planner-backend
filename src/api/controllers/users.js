@@ -2,7 +2,6 @@ const mongoose = require('mongoose');
 const { generateSign, generateToken } = require('../../utils/jwt');
 const User = require('../models/users');
 const bcrypt = require('bcrypt');
-const { deleteFile } = require('../../utils/file');
 
 const getUsers = async (req, res) => {
   try {
@@ -70,15 +69,18 @@ const register = async (req, res, next) => {
 };
 
 const login = async (req, res) => {
+  console.log("Datos recibidos para login:", req.body);
   const { userName, password } = req.body;
 
   try {
     const user = await User.findOne({ userName });
+    console.log("Usuario encontrado:", user);
     if (!user) {
       return res.status(401).json({ error: 'Usuario no encontrado' });
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
+    console.log("Contraseña correcta:", isMatch);
     if (!isMatch) {
       return res.status(401).json({ error: 'Contraseña incorrecta' });
     }
@@ -90,7 +92,6 @@ const login = async (req, res) => {
     res.status(500).json({ error: 'Error en el inicio de sesión' });
   }
 };
-
 
 const deleteUser = async (req, res, next) => {
   try {
@@ -147,7 +148,6 @@ const updateUser = async (req, res, next) => {
     });
   }
 };
-
 
 const getUserProfile = async (req, res) => {
   try {
