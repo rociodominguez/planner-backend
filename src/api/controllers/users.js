@@ -40,6 +40,16 @@ const register = async (req, res, next) => {
   try {
     const { userName, password, email } = req.body;
 
+    if (!userName || !password || !email) {
+      throw new Error('Todos los campos son obligatorios');
+    }
+
+    const existingUser = await User.findOne({ userName });
+
+    if (existingUser) {
+      throw new Error('El nombre de usuario ya está en uso');
+    }
+
     const newUser = new User({
       userName,
       password,
@@ -47,24 +57,14 @@ const register = async (req, res, next) => {
       rol: 'user',
     });
 
-    const duplicateUser = await User.findOne({ userName });
+    await newUser.save();
 
-    if (duplicateUser) {
-      return res
-        .status(400)
-        .json({ error: 'El nombre de usuario ya está en uso' });
-    }
+    const token = generateToken(newUser);
 
-    const userSaved = await newUser.save();
-
-    const token = generateSign(userSaved._id);
-
-    return res.status(200).json({ user: userSaved, token });
+    res.status(201).json({ user: newUser, token });
   } catch (error) {
-    console.error('Error al registrar usuario:', error);
-    return res.status(500).json({
-      error: 'Error interno del servidor al procesar la solicitud de registro',
-    });
+    console.error('Error al registrar usuario:', error.message);
+    res.status(500).json({ error: error.message });
   }
 };
 
@@ -151,19 +151,17 @@ const updateUser = async (req, res, next) => {
 
 const getUserProfile = async (req, res) => {
   try {
-    const userId = req.user?._id; // Usa `req.user._id`
+    const userId = req.user?._id;
     if (!userId) {
       return res.status(400).json({ error: 'ID de usuario no proporcionado' });
     }
 
-    // Encuentra el usuario y poblaciones los eventos confirmados
     const user = await User.findById(userId).populate('attendingEvents', 'title date');
 
     if (!user) {
       return res.status(404).json({ error: 'Usuario no encontrado' });
     }
 
-    // Devuelve solo los eventos confirmados
     res.status(200).json(user.attendingEvents);
   } catch (error) {
     console.error('Error al obtener eventos confirmados del usuario:', error);

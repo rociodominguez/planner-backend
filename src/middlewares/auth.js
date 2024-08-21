@@ -11,24 +11,25 @@ const isAuth = async (req, res, next) => {
 
   try {
     const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decodedToken.id); // Asegúrate de que `id` coincida con el campo del token
+    const user = await User.findById(decodedToken.id);
 
     if (!user) {
       return res.status(401).json({ error: 'Usuario no encontrado' });
     }
 
-    req.user = {  // Asigna `user` a `req.user`
+    req.user = {  
       _id: user._id,
       rol: user.rol,
     };
     next();
   } catch (err) {
+    console.error('Error al verificar el token:', err);
     return res.status(401).json({ error: 'Token inválido' });
   }
 };
 
 const isAdmin = async (req, res, next) => {
-  const token = req.headers.authorization?.split(' ')[1]; // Asegúrate de extraer el token correctamente
+  const token = req.headers.authorization?.split(' ')[1];
 
   if (!token) {
     return res.status(403).json({ error: 'Token no proporcionado' });
@@ -37,7 +38,7 @@ const isAdmin = async (req, res, next) => {
   try {
     const decodedToken = verifyJwt(token); // Verifica el token
 
-    const user = await User.findById(decodedToken.id); // Asegúrate de que `id` coincida con el campo del token
+    const user = await User.findById(decodedToken.id);
 
     if (user && user.rol === 'admin') {
       req.user = user;

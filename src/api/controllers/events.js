@@ -120,33 +120,24 @@ const deleteEvent = async (req, res, next) => {
 };
 
 const addAttendant = async (req, res) => {
-  try {
-    const userId = req.userData.userId; // ID del usuario extraído del token
-    const eventId = req.params.eventId;
+  const { eventId } = req.params;
+  const userId = req.user._id; // Asegúrate de que req.user esté definido por el middleware isAuth
 
-    // Encuentra el evento por ID
+  try {
+    // Buscar el evento por ID
     const event = await Event.findById(eventId);
     if (!event) {
       return res.status(404).json({ error: 'Evento no encontrado' });
     }
 
-    // Encuentra al usuario por ID
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({ error: 'Usuario no encontrado' });
+    // Verificar si el usuario ya está en la lista de asistentes
+    if (event.attendants.includes(userId)) {
+      return res.status(400).json({ error: 'Ya has confirmado tu asistencia a este evento' });
     }
 
-    // Añade el usuario a la lista de asistentes del evento si no está ya
-    if (!event.attendants.includes(userId)) {
-      event.attendants.push(userId);
-      await event.save();
-    }
-
-    // Añade el evento a la lista de eventos confirmados del usuario si no está ya
-    if (!user.attendingEvents.includes(eventId)) {
-      user.attendingEvents.push(eventId);
-      await user.save();
-    }
+    // Añadir el usuario a la lista de asistentes
+    event.attendants.push(userId);
+    await event.save();
 
     res.status(200).json({ message: 'Asistencia confirmada' });
   } catch (error) {
@@ -154,6 +145,7 @@ const addAttendant = async (req, res) => {
     res.status(500).json({ error: 'Error al añadir asistente' });
   }
 };
+
 
 const removeAttendant = async (req, res, next) => {
   try {
