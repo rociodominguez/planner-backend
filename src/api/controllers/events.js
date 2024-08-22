@@ -170,37 +170,25 @@ const addAttendant = async (req, res) => {
   }
 };
 
-const removeAttendant = async (req, res, next) => {
+const removeAttendant = async (req, res) => {
   try {
     const { eventId } = req.params;
-    const { userId } = req.body;
+    const userId = req.body.userId;
 
-    if (
-      !mongoose.Types.ObjectId.isValid(eventId) ||
-      !mongoose.Types.ObjectId.isValid(userId)
-    ) {
-      return res
-        .status(400)
-        .json({ error: 'ID de evento o usuario no válido' });
+    if (!mongoose.Types.ObjectId.isValid(eventId) || !mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ error: 'ID de evento o usuario no válido' });
     }
 
-    const event = await Event.findById(eventId).populate(
-      'attendants',
-      'userName'
-    );
+    const event = await Event.findById(eventId).populate('attendants', 'userName');
 
     if (!event) {
       return res.status(404).json({ error: 'Evento no encontrado' });
     }
 
     // Verificar si el usuario está en la lista de asistentes
-    const userIndex = event.attendants.findIndex(
-      (attendant) => attendant._id.toString() === userId
-    );
+    const userIndex = event.attendants.findIndex(attendant => attendant._id.toString() === userId);
     if (userIndex === -1) {
-      return res
-        .status(400)
-        .json({ error: 'El usuario no está en la lista de asistentes' });
+      return res.status(400).json({ error: 'El usuario no está en la lista de asistentes' });
     }
 
     // Remover al usuario de la lista de asistentes y guardar el evento
@@ -215,9 +203,7 @@ const removeAttendant = async (req, res, next) => {
     }
 
     // Verificar si el evento está en la lista de eventos a los que el usuario asiste
-    const eventIndex = user.attendingEvents.findIndex(
-      (event) => event._id.toString() === eventId
-    );
+    const eventIndex = user.attendingEvents.findIndex(event => event._id.toString() === eventId);
     if (eventIndex !== -1) {
       // Remover el evento de la lista de eventos del usuario
       user.attendingEvents.splice(eventIndex, 1);
@@ -225,15 +211,12 @@ const removeAttendant = async (req, res, next) => {
     }
 
     // Devolver respuesta exitosa
-    return res
-      .status(200)
-      .json({ message: 'Asistencia cancelada exitosamente', event });
+    return res.status(200).json({ message: 'Asistencia cancelada exitosamente', event });
   } catch (error) {
-    return res
-      .status(500)
-      .json({ error: `Error al cancelar asistencia: ${error.message}` });
+    return res.status(500).json({ error: `Error al cancelar asistencia: ${error.message}` });
   }
 };
+
 
 const getAttendeesByEvent = async (req, res, next) => {
   try {
@@ -274,6 +257,8 @@ const getConfirmedEvents = async (req, res) => {
     res.status(500).json({ error: 'Error al obtener eventos confirmados' });
   }
 };
+
+
 
 module.exports = {
   getEvents,
