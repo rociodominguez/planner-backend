@@ -69,27 +69,27 @@ const register = async (req, res, next) => {
 };
 
 const login = async (req, res) => {
-  console.log("Datos recibidos para login:", req.body);
   const { userName, password } = req.body;
 
   try {
-    const user = await User.findOne({ userName });
-    console.log("Usuario encontrado:", user);
-    if (!user) {
-      return res.status(401).json({ error: 'Usuario no encontrado' });
-    }
+      const user = await User.findOne({ userName });
+      if (!user) {
+          return res.status(401).json({ error: 'Usuario no encontrado' });
+      }
 
-    const isMatch = await bcrypt.compare(password, user.password);
-    console.log("Contraseña correcta:", isMatch);
-    if (!isMatch) {
-      return res.status(401).json({ error: 'Contraseña incorrecta' });
-    }
+      const isMatch = await bcrypt.compare(password, user.password);
+      if (!isMatch) {
+          return res.status(401).json({ error: 'Contraseña incorrecta' });
+      }
 
-    const token = generateToken(user);
-    res.status(200).json({ token, role: user.rol });
+      const token = generateToken(user);
+      res.status(200).json({
+          token,
+          role: user.rol,
+          userId: user._id
+      });
   } catch (error) {
-    console.error('Error en el inicio de sesión:', error);
-    res.status(500).json({ error: 'Error en el inicio de sesión' });
+      res.status(500).json({ error: 'Error en el inicio de sesión' });
   }
 };
 
@@ -112,40 +112,37 @@ const deleteUser = async (req, res, next) => {
 
 const updateUser = async (req, res, next) => {
   try {
-    const { id } = req.params;
-    console.log('User ID in Controller:', id); // Verifica el ID recibido en el backend
+      const { id } = req.params;
+      console.log('User ID in Controller:', id);
 
-    if (!id) {
-      return res.status(400).json({ error: 'ID de usuario no proporcionado' });
-    }
+      if (!id) {
+          return res.status(400).json({ error: 'ID de usuario no proporcionado' });
+      }
 
-    const currentUser = await User.findById(id);
-    if (!currentUser) {
-      return res.status(404).json({ error: 'Usuario no encontrado' });
-    }
+      const currentUser = await User.findById(id);
+      if (!currentUser) {
+          return res.status(404).json({ error: 'Usuario no encontrado' });
+      }
 
-    const { userName, email } = req.body;
-    const updateData = {};
+      const { userName } = req.body;
+      const updateData = {};
 
-    if (userName) {
-      updateData.userName = userName;
-    }
-    if (email) {
-      updateData.email = email;
-    }
+      if (userName) {
+          updateData.userName = userName;
+      }
 
-    const updatedUser = await User.findByIdAndUpdate(id, updateData, { new: true });
+      const updatedUser = await User.findByIdAndUpdate(id, updateData, { new: true });
 
-    if (!updatedUser) {
-      return res.status(404).json({ error: 'Usuario no encontrado' });
-    }
+      if (!updatedUser) {
+          return res.status(404).json({ error: 'Usuario no encontrado' });
+      }
 
-    return res.status(200).json(updatedUser);
+      return res.status(200).json(updatedUser);
   } catch (error) {
-    console.error('Error al actualizar usuario:', error);
-    return res.status(500).json({
-      error: 'Error interno del servidor al actualizar el usuario',
-    });
+      console.error('Error al actualizar usuario:', error);
+      return res.status(500).json({
+          error: 'Error interno del servidor al actualizar el usuario',
+      });
   }
 };
 
@@ -162,7 +159,6 @@ const getUserProfile = async (req, res) => {
     res.status(500).json({ error: 'Error en el servidor' });
   }
 }
-
 
 module.exports = {
   getUserProfile,
