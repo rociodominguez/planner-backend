@@ -48,28 +48,38 @@ const getEventById = async (req, res, next) => {
 
 const createEvent = async (req, res) => {
   try {
-    if (req.user.rol !== 'admin') { 
+    if (req.user.rol !== 'admin') {
       return res.status(403).json({ error: 'Acceso denegado. Solo los administradores pueden crear eventos.' });
     }
 
     const { title, description, date } = req.body;
-    const imageUrl = req.file ? req.file.path : null; 
+
+    let imageUrl = null;
+    if (req.file) {
+      // Subir la imagen a Cloudinary
+      const result = await cloudinary.uploader.upload(req.file.path, {
+        folder: 'P10',
+        allowed_formats: ['jpg', 'png', 'jpeg']
+      });
+      imageUrl = result.secure_url; // URL de la imagen en Cloudinary
+      console.log('Imagen subida a Cloudinary:', imageUrl); // Para depuración
+    }
 
     const newEvent = new Event({
       title,
       description,
       date,
       imageUrl,
-      createdBy: req.user._id, 
+      createdBy: req.user._id
     });
 
     await newEvent.save();
     res.status(201).json(newEvent);
   } catch (error) {
+    console.error('Error al crear el evento:', error); // Para depuración
     res.status(500).json({ error: error.message });
   }
 };
-
 
 const updateEvent = async (req, res) => {
   try {
@@ -121,31 +131,44 @@ const deleteEvent = async (req, res, next) => {
 
 const addAttendant = async (req, res) => {
   const { eventId } = req.params;
-  const userId = req.user._id; // Asegúrate de que req.user esté definido por el middleware isAuth
+  const userId = req.user._id;
 
   try {
-    // Buscar el evento por ID
     const event = await Event.findById(eventId);
     if (!event) {
       return res.status(404).json({ error: 'Evento no encontrado' });
     }
 
-    // Verificar si el usuario ya está en la lista de asistentes
     if (event.attendants.includes(userId)) {
       return res.status(400).json({ error: 'Ya has confirmado tu asistencia a este evento' });
     }
 
-    // Añadir el usuario a la lista de asistentes
     event.attendants.push(userId);
     await event.save();
 
-    res.status(200).json({ message: 'Asistencia confirmada' });
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    if (!user.attendingEvents.includes(eventId)) {
+      user.attendingEvents.push(eventId);
+      await user.save();
+    }
+
+    const eventDetails = await Event.findById(eventId)
+      .populate('createdBy', 'userName')
+      .exec();
+
+    res.status(200).json({
+      message: 'Asistencia confirmada',
+      event: eventDetails
+    });
   } catch (error) {
     console.error('Error al añadir asistente:', error);
     res.status(500).json({ error: 'Error al añadir asistente' });
   }
 };
-
 
 const removeAttendant = async (req, res, next) => {
   try {
@@ -236,7 +259,21 @@ const getAttendeesByEvent = async (req, res, next) => {
   }
 };
 
+const getConfirmedEvents = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const user = await User.findById(userId).populate('attendingEvents');
 
+    if (!user) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    res.status(200).json(user.attendingEvents);
+  } catch (error) {
+    console.error('Error al obtener eventos confirmados:', error);
+    res.status(500).json({ error: 'Error al obtener eventos confirmados' });
+  }
+};
 
 module.exports = {
   getEvents,
@@ -247,4 +284,5 @@ module.exports = {
   addAttendant,
   removeAttendant,
   getAttendeesByEvent,
+  getConfirmedEvents
 };

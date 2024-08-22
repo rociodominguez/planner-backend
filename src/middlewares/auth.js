@@ -28,6 +28,7 @@ const isAuth = async (req, res, next) => {
   }
 };
 
+
 const isAdmin = async (req, res, next) => {
   const token = req.headers.authorization?.split(' ')[1];
 
@@ -36,7 +37,7 @@ const isAdmin = async (req, res, next) => {
   }
 
   try {
-    const decodedToken = verifyJwt(token); // Verifica el token
+    const decodedToken = verifyJwt(token);
 
     const user = await User.findById(decodedToken.id);
 

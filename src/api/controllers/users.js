@@ -151,23 +151,18 @@ const updateUser = async (req, res, next) => {
 
 const getUserProfile = async (req, res) => {
   try {
-    const userId = req.user?._id;
-    if (!userId) {
-      return res.status(400).json({ error: 'ID de usuario no proporcionado' });
-    }
-
-    const user = await User.findById(userId).populate('attendingEvents', 'title date');
-
+    const userId = req.user._id; 
+    const user = await User.findById(userId).populate('attendingEvents'); 
     if (!user) {
       return res.status(404).json({ error: 'Usuario no encontrado' });
     }
-
-    res.status(200).json(user.attendingEvents);
+    res.json(user.attendingEvents); 
   } catch (error) {
-    console.error('Error al obtener eventos confirmados del usuario:', error);
-    res.status(500).json({ error: 'Error al obtener eventos confirmados' });
+    console.error('Error al obtener eventos confirmados:', error);
+    res.status(500).json({ error: 'Error en el servidor' });
   }
-};
+}
+
 
 module.exports = {
   getUserProfile,
@@ -176,5 +171,5 @@ module.exports = {
   register,
   login,
   deleteUser,
-  updateUser,
+  updateUser
 };
