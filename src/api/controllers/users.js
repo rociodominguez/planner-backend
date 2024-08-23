@@ -112,39 +112,33 @@ const deleteUser = async (req, res, next) => {
 
 const updateUser = async (req, res, next) => {
   try {
-      const { id } = req.params;
-      console.log('User ID in Controller:', id);
+    const userId = req.user._id;
+    const { userName } = req.body;
 
-      if (!id) {
-          return res.status(400).json({ error: 'ID de usuario no proporcionado' });
-      }
+    if (!userName) {
+      return res.status(400).json({ error: 'El nombre de usuario es obligatorio' });
+    }
 
-      const currentUser = await User.findById(id);
-      if (!currentUser) {
-          return res.status(404).json({ error: 'Usuario no encontrado' });
-      }
+    // Verifica si el nuevo nombre de usuario ya está en uso por otro usuario
+    const existingUser = await User.findOne({ userName });
+    if (existingUser && existingUser._id.toString() !== userId.toString()) {
+      return res.status(400).json({ error: 'El nombre de usuario ya está en uso' });
+    }
 
-      const { userName } = req.body;
-      const updateData = {};
+    // Actualiza el nombre de usuario
+    const updatedUser = await User.findByIdAndUpdate(userId, { userName }, { new: true });
 
-      if (userName) {
-          updateData.userName = userName;
-      }
+    if (!updatedUser) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
 
-      const updatedUser = await User.findByIdAndUpdate(id, updateData, { new: true });
-
-      if (!updatedUser) {
-          return res.status(404).json({ error: 'Usuario no encontrado' });
-      }
-
-      return res.status(200).json(updatedUser);
+    res.status(200).json({ message: 'Nombre de usuario actualizado correctamente', user: updatedUser });
   } catch (error) {
-      console.error('Error al actualizar usuario:', error);
-      return res.status(500).json({
-          error: 'Error interno del servidor al actualizar el usuario',
-      });
+    console.error('Error al actualizar usuario:', error);
+    res.status(500).json({ error: 'Error interno del servidor al actualizar el usuario' });
   }
 };
+
 
 const getUserProfile = async (req, res) => {
   try {
@@ -160,6 +154,31 @@ const getUserProfile = async (req, res) => {
   }
 }
 
+const getUserProfileInfo = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const user = await User.findById(userId).select('userName email');
+    
+    if (!user) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+    
+    // Construir el objeto de respuesta con la información básica del perfil
+    const userProfile = {
+      username: user.userName || '',
+      email: user.email || '',
+    };
+    
+    // Enviar la respuesta con la información del perfil del usuario
+    res.json(userProfile);
+  } catch (error) {
+    console.error('Error al obtener la información del perfil del usuario:', error);
+    res.status(500).json({ error: 'Error en el servidor' });
+  }
+};
+
+
+
 module.exports = {
   getUserProfile,
   getUsers,
@@ -167,5 +186,6 @@ module.exports = {
   register,
   login,
   deleteUser,
-  updateUser
+  updateUser,
+  getUserProfileInfo
 };
