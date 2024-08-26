@@ -3,6 +3,9 @@ const Event = require('../models/events');
 const mongoose = require('mongoose');
 const User = require('../models/users');
 const jwt = require('jsonwebtoken');
+const upload = require ('../../utils/cloudinary')
+const cloudinary = require('cloudinary').v2;
+
 
 const getEvents = async (req, res, next) => {
   try {
@@ -56,13 +59,12 @@ const createEvent = async (req, res) => {
 
     let imageUrl = null;
     if (req.file) {
-      // Subir la imagen a Cloudinary
       const result = await cloudinary.uploader.upload(req.file.path, {
         folder: 'P10',
         allowed_formats: ['jpg', 'png', 'jpeg']
       });
-      imageUrl = result.secure_url; // URL de la imagen en Cloudinary
-      console.log('Imagen subida a Cloudinary:', imageUrl); // Para depuración
+      imageUrl = result.secure_url;
+      console.log('Imagen subida a Cloudinary:', imageUrl);
     }
 
     const newEvent = new Event({
@@ -76,7 +78,7 @@ const createEvent = async (req, res) => {
     await newEvent.save();
     res.status(201).json(newEvent);
   } catch (error) {
-    console.error('Error al crear el evento:', error); // Para depuración
+    console.error('Error al crear el evento:', error);
     res.status(500).json({ error: error.message });
   }
 };
