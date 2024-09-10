@@ -41,13 +41,16 @@ const register = async (req, res, next) => {
     const { userName, password, email } = req.body;
 
     if (!userName || !password || !email) {
-      throw new Error('Todos los campos son obligatorios');
+      return res.status(400).json({ error: 'Todos los campos son obligatorios' });
     }
 
     const existingUser = await User.findOne({ userName });
-
     if (existingUser) {
-      throw new Error('El nombre de usuario ya está en uso');
+      return res.status(409).json({ error: 'El nombre de usuario ya está en uso' });
+    }
+    const existingEmail = await User.findOne({ email });
+    if (existingEmail) {
+      return res.status(409).json({ error: 'El correo electrónico ya está en uso' });
     }
 
     const newUser = new User({
@@ -62,11 +65,13 @@ const register = async (req, res, next) => {
     const token = generateToken(newUser);
 
     res.status(201).json({ user: newUser, token });
+    
   } catch (error) {
     console.error('Error al registrar usuario:', error.message);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Ocurrió un error en el servidor. Por favor, intenta de nuevo más tarde.' });
   }
 };
+
 
 const login = async (req, res) => {
   const { userName, password } = req.body;
