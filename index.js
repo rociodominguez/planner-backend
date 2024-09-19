@@ -12,8 +12,8 @@ cloudinary.config({
 });
 
 const app = express();
+app.use(cors())
 app.use(express.json());
-app.use(cors());
 
 connectDB();
 
@@ -23,6 +23,6 @@ app.use("*", (req, res, next) => {
     return res.status(404).json("Not found! ❌");
 });
 
-app.listen(8080, () => {
-  console.log("http://localhost:8080 ✅");
+app.listen(8000, () => {
+  console.log("http://localhost:8000 ✅");
 });

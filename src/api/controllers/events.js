@@ -1,9 +1,6 @@
-const { deleteFile } = require('../../utils/file');
 const Event = require('../models/events');
 const mongoose = require('mongoose');
 const User = require('../models/users');
-const jwt = require('jsonwebtoken');
-const upload = require ('../../utils/cloudinary')
 const cloudinary = require('cloudinary').v2;
 
 

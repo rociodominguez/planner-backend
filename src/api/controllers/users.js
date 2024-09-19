@@ -72,7 +72,6 @@ const register = async (req, res, next) => {
   }
 };
 
-
 const login = async (req, res) => {
   const { userName, password } = req.body;
 
@@ -144,7 +143,6 @@ const updateUser = async (req, res, next) => {
   }
 };
 
-
 const getUserProfile = async (req, res) => {
   try {
     const userId = req.user._id; 
@@ -181,8 +179,6 @@ const getUserProfileInfo = async (req, res) => {
     res.status(500).json({ error: 'Error en el servidor' });
   }
 };
-
-
 
 module.exports = {
   getUserProfile,
