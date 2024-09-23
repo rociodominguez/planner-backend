@@ -44,10 +44,15 @@ const register = async (req, res, next) => {
       return res.status(400).json({ error: 'Todos los campos son obligatorios' });
     }
 
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres' });
+    }
+
     const existingUser = await User.findOne({ userName });
     if (existingUser) {
       return res.status(409).json({ error: 'El nombre de usuario ya está en uso' });
     }
+
     const existingEmail = await User.findOne({ email });
     if (existingEmail) {
       return res.status(409).json({ error: 'El correo electrónico ya está en uso' });
@@ -64,36 +69,42 @@ const register = async (req, res, next) => {
 
     const token = generateToken(newUser);
 
-    res.status(201).json({ user: newUser, token });
-    
+    return res.status(201).json({ user: newUser, token });
+
   } catch (error) {
     console.error('Error al registrar usuario:', error.message);
-    res.status(500).json({ error: 'Ocurrió un error en el servidor. Por favor, intenta de nuevo más tarde.' });
+    return res.status(500).json({ error: 'Error en el servidor al registrar. Por favor, intenta de nuevo.' });
   }
 };
 
 const login = async (req, res) => {
   const { userName, password } = req.body;
 
+  if (!userName || !password) {
+    return res.status(400).json({ error: 'Debes ingresar un nombre de usuario y una contraseña.' });
+  }
+
   try {
-      const user = await User.findOne({ userName });
-      if (!user) {
-          return res.status(401).json({ error: 'Usuario no encontrado' });
-      }
+    const user = await User.findOne({ userName });
+    if (!user) {
+      return res.status(401).json({ error: 'El usuario no existe. Verifica tu nombre de usuario.' });
+    }
 
-      const isMatch = await bcrypt.compare(password, user.password);
-      if (!isMatch) {
-          return res.status(401).json({ error: 'Contraseña incorrecta' });
-      }
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(401).json({ error: 'La contraseña es incorrecta. Intenta de nuevo.' });
+    }
 
-      const token = generateToken(user);
-      res.status(200).json({
-          token,
-          role: user.rol,
-          userId: user._id
-      });
+    const token = generateToken(user);
+    return res.status(200).json({
+      token,
+      role: user.rol,
+      userId: user._id
+    });
+
   } catch (error) {
-      res.status(500).json({ error: 'Error en el inicio de sesión' });
+    console.error('Error en el inicio de sesión:', error);
+    return res.status(500).json({ error: 'Error en el servidor durante el inicio de sesión. Intenta de nuevo más tarde.' });
   }
 };
 
